@@ -1,0 +1,11 @@
+Flask==2.3.3
+Flask-Cors==4.0.0
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+marshmallow==3.21.1
+werkzeug==2.3.7
+validators==0.22.0
+
+# Google OAuth login
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
