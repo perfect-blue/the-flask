@@ -1,0 +1,22 @@
+[project]
+name = "the_flask"
+version = "0.1.0"
+description = "Flask Engine for basic CRUD"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=2.2.5",
+    "psycopg2-binary>=2.9.10", 
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+hello = "the_flask:hello"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.6.2",
+]

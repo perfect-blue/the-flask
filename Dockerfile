@@ -1,56 +1,39 @@
-FROM python:3.9-slim-bullseye
+# Use a Python image with uv pre-installed
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# for run on macbook
-# FROM --platform=linux/amd64 python:3.9-slim-bullseye
+# LABEL maintainer = "Muhammad Ravi"
 
-LABEL maintainer="Muhammad Ravi"
+# Install the project into `/app`
+WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    # required for psycopg2 compilation (if not using library)
-    libpq-dev \
-    # runtime dependency for PostgresSQL
-    libpq5 \
-    # downloading UV
-    curl \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && rm -rf /var/lib/apt/lists/*
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
 
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
 
-# Add uv to PATH
-ENV PATH="/root/.cargo/bin:${PATH}"
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-# Install Python dependencies
-COPY dependencies.txt /dependencies.txt
+# Then, add the rest of the project source code and install it
+# Installing separately from its dependencies allows optimal layer caching
+ADD . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # for gcc
-    build-essential \
-    gcc \
-    git \
-    && python3.9 -m pip install -U --no-cache-dir pip \
-    && uv pip install --python python3.9 -U -r /dependencies.txt \
-    # must install separately due to NumPy must be installed earlier
-    && uv pip install --python python3.9 Cython \
-    && apt-get purge -y --auto-remove build-essential gcc git python3-dev curl \
-    && rm /dependencies.txt \
-    && rm -rf /var/lib/apt/lists/*
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Create non-root user and share access to /src 
-RUN groupadd -g 999 station && \
-    useradd -r -u 999 -g station station
-USER station
+# Reset the entrypoint, don't invoke `uv`
+ENTRYPOINT []
 
-COPY --chown=station:station src/ /src
-COPY --chown=station:station scripts/wait-for-it.sh /src
+# Run the FastAPI application by default
+# Uses `fastapi dev` to enable hot-reloading when the `watch` sync occurs
+# Uses `--host 0.0.0.0` to allow access from outside the container
+# Set Flask app environment variable
+ENV FLASK_APP=src.the_flask
 
-# Pass commit SHA from build
-ARG COMMIT_SHA
-ENV COMMIT_SHA=${COMMIT_SHA}
-
-WORKDIR /src
-RUN mkdir -p tmp/logs
-
-EXPOSE 5000 8000
-
-CMD ["flask", "--app", "app:app", "run", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["flask", "run", "--host", "0.0.0.0", "--port", "5000"]
